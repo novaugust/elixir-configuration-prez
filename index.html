@@ -1,0 +1,361 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+		<title>reveal.js</title>
+
+		<link rel="stylesheet" href="css/reveal.css">
+		<link rel="stylesheet" href="css/theme/black.css">
+
+		<!-- Theme used for syntax highlighting of code -->
+		<link rel="stylesheet" href="lib/css/zenburn.css">
+
+		<!-- Printing and PDF exports -->
+		<script>
+			var link = document.createElement( 'link' );
+			link.rel = 'stylesheet';
+			link.type = 'text/css';
+			link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
+			document.getElementsByTagName( 'head' )[0].appendChild( link );
+		</script>
+		<style media="screen">
+			.reveal h1,.reveal h2,.reveal h3,.reveal h4,.reveal h5 {
+				text-transform: none;
+			}
+			.reveal a {
+				color: #22af56;
+			}
+			.reveal a:hover {
+				color: #029f36;
+			}
+			.reveal blockquote {
+				width: 80%;
+				padding: 30px;
+				font-style: normal;
+			}
+			.halvsies	{
+				display: flex;
+			}
+			.halvsies	> div	{
+				-webkit-flex: 1 1 50%;
+				-moz-flex: 1 1 50%;
+				-ms-flex: 1 1 50%;
+				-o-flex: 1 1 50%;
+				flex: 1 1 50%;
+			}
+			/*	highlight all code, override hljs */
+			.reveal .slides section .fragment.highlight-current-green.current-fragment *	{
+				color: #17ff2e;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="reveal">
+			<div class="slides">
+
+				<section>
+					<h1>
+						Elixir
+						Application
+						Configuration
+					</h1>
+					<h2>
+						Gotchas
+						&amp;
+						Best Practices
+					</h2>
+					<h4>
+						Matt Enlow
+						<br>
+						<a href="http://novaugust.net" style="font-style:italic">@novaugust</a>
+					</h4>
+					<p>Boulder Elixir Meetup. May 10, 2016.</p>
+				</section>
+
+				<section>
+					<section data-markdown>
+						<script type="text/template">
+							## Application Configuration
+
+							from [12Factor.net#Config](http://12factor.net/config)
+
+							> An app’s config is everything that is likely to vary between deploys
+
+						</script>
+					</section>
+					<section data-markdown>
+						<script type="text/template">
+							### 12 Factor App
+
+							Methodology for building scalable, low maintenance web applications / SAAS platforms.
+
+							> - offering **maximum portability** between execution environments
+							> -	suitable for **deployment on modern cloud platforms**
+							> - **Minimize divergence** between development and production
+							> - And can **scale up** without significant changes to tooling, architecture, or development practices
+
+						</script>
+					</section>
+				</section>
+
+				<section>
+					<h2>Deployments</h2>
+					<div class="halvsies">
+						<div data-markdown>
+							<script type="text/template">
+								### Environments
+
+								- staging
+								- production
+								- development
+								- test
+								- &hellip;
+
+							</script>
+						</div>
+						<div data-markdown>
+							<script type="text/template">
+								### Variables
+
+								- credentials (DB, APIs, etc)
+								- resource URIs
+								- per-deploy feature configuration
+								- &hellip;
+							</script>
+						</div>
+					</div>
+				</section>
+
+				<section>
+					<section data-markdown>
+						<script type="text/template">
+							## Configuration in Elixir
+							### Mix Config
+
+							```Elixir
+							# config/config.exs
+							use Mix.Config
+
+							config :my_app, secret: "secret"
+							```
+
+							### Application module <!-- .element: class="fragment" data-fragment-index="1" -->
+							<aside style="font-size:.5em;font-style:italic;">[powered by ets](https://github.com/erlang/otp/blob/maint/lib/kernel/src/application_controller.erl#L331-L335)</aside><!-- .element: class="fragment" data-fragment-index="1" -->
+
+							```Elixir
+							Application.get_env(:my_app, :secret)
+							#=> "secret"
+							```
+							<!-- .element: class="fragment" data-fragment-index="1" -->
+
+						</script>
+					</section>
+				</section>
+
+				<section>
+					<section data-markdown>
+						<script type="text/template">
+							## Different environments
+
+							> ... offering maximum portability between execution environments
+
+							\- 12FA
+
+							Easy!
+						</script>
+					</section>
+
+					<section>
+						<pre>
+							<code data-trim data-noescape class="lang-elixir">
+# config/config.exs
+config :my_app, secret: "devPW"
+<span class="fragment highlight-current-green">import_config "#{Mix.env}.exs"</span>
+
+# config/prod.exs
+config :my_app, secret: "prodPW"
+							</code>
+						</pre>
+						<pre class="fragment">
+							<code data-trim data-noescape class="lang-elixir">
+# $ iex -S mix
+Application.get_env(:my_app, :secret)
+# => "devPW"
+							</code>
+						</pre>
+					<pre class="fragment">
+						<code data-trim data-noescape class="lang-elixir">
+# $ MIX_ENV=prod iex -S mix
+Application.get_env(:my_app, :secret)
+# => "prodPW"
+						</code>
+					</pre>
+					</section>
+				</section>
+
+				<section>
+					<section data-markdown>
+						<script type="text/template">
+							## Environment Variables
+
+							> Sometimes apps batch config into named groups
+							>
+							> This method does not scale cleanly
+							>
+							> as more deploys of the app are created, new environment names are necessary ...
+							>
+							> resulting in a combinatorial explosion of config
+						</script>
+					</section>
+					<section data-markdown>
+						<script type="text/template">
+							> ... env vars are granular controls, each fully orthogonal to other env vars
+							>
+							> They are never grouped together as “environments”, but instead are independently managed for each deploy.
+							>
+							> This is a model that scales up smoothly [...]
+
+							Again, easy!
+						</script>
+						</section>
+
+					<section>
+						<pre>
+							<code data-trim data-noescape class="lang-elixir">
+#config/config.exs
+config :my_app, <span class="fragment highlight-current-green">secret: System.get_env("MY_APP_SECRET")</span>
+							</code>
+						</pre>
+
+
+						<pre class="fragment">
+							<code data-trim data-noescape class="lang-elixir">
+# $ MY_APP_SECRET="useEnvVars" iex -S mix
+Application.get_env(:my_app, :secret)
+#=> "useEnvVars"
+							</code>
+						</pre>
+					</section>
+				</section>
+
+				<section data-markdown>
+					<script type="text/template">
+						## The Gotcha
+
+						### config.exs is compile-time! <!-- .element: class="fragment" -->
+
+						What if we're compiling on one server (travis, heroku...) and deploying on another?<!-- .element: class="fragment" -->
+					</script>
+				</section>
+
+				<section>
+					<section>
+						<h2>If You Love It So Much</h2>
+						<small class="fragment">Why Don't You Steal All of Its Ideas</small>
+						<p class="fragment">
+							Phoenix solves this problem like so
+						</p>
+
+
+						<pre class="fragment">
+							<code data-trim data-noescape class="lang-elixir">
+config :my_app, MyApp.Endpoint,
+	http: [port: <span class="fragment highlight-current-green">{:system, "PORT"}</span>]
+</pre>
+</code>
+
+						<pre class="fragment">
+							<code data-trim data-noescape class="bash">
+PORT=1337 mix phoenix.server
+# [info] Running Grid.Endpoint with Cowboy using http on port 1337
+	</code>
+</pre>
+						<p class="fragment">!!!</p>
+					</section>
+
+					<section>
+						<p>
+							Let's try!
+						</p>
+						<pre class="fragment">
+							<code data-trim data-noescape class="lang-elixir">
+config :my_app, secret: {:system, "MY_APP_SECRET"}
+</code>
+</pre>
+
+						<pre class="fragment">
+							<code data-trim data-noescape class="lang-elixir">
+# $ MY_APP_SECRET="this presentation must finally be over!" iex -S mix
+Application.get_env(:my_app, :secret)
+<span class="fragment"># => {:system, "MY_APP_SECRET"}</span>
+						</code>
+					</pre>
+
+
+					<p class="fragment">Bummer.</p>
+					<pre class="fragment">
+						<code data-trim data-noescape class="lang-elixir">
+# in Phoenix.Endpoint.Server
+defp to_port({:system, env_var}) do
+  to_port(System.get_env(env_var))
+end
+						</code>
+					</pre>
+
+					</section>
+				</section>
+
+			<section data-markdown>
+				<script type="text/template">
+					## Building your own config module
+
+					```Elixir
+					defmodule MyApp do
+					  def get_env(key, default \\ nil) do
+					    case Application.get_env(:my_app, key, default) do
+					      {:system, env_var} -> System.get_env(env_var)
+					      value -> value
+					    end
+					  end
+					end
+					```
+					```Elixir
+					# $> MY_APP_SECRET="yeehaw" iex -S mix s
+					MyApp.get_env(:secret)
+					# => "yeehaw"
+					```
+					<!-- .element: class="fragment" -->
+				</script>
+			</section>
+
+			<section>
+				<h3>This is the slide that lets you know we're done.</h3>
+				<p class="fragment">
+					Thanks!
+				</p>
+				<small class="fragment">PS: Make an alias for <code>phoenix.server</code>. Too much typing!</small>
+			</section>
+			</div>
+		</div>
+
+		<script src="lib/js/head.min.js"></script>
+		<script src="js/reveal.js"></script>
+
+		<script>
+			// More info https://github.com/hakimel/reveal.js#configuration
+			Reveal.initialize({
+				history: true,
+
+				// More info https://github.com/hakimel/reveal.js#dependencies
+				dependencies: [
+					{ src: 'plugin/markdown/marked.js' },
+					{ src: 'plugin/markdown/markdown.js' },
+					{ src: 'plugin/notes/notes.js', async: true },
+					{ src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } }
+				]
+			});
+		</script>
+	</body>
+</html>
